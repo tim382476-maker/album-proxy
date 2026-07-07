@@ -86,7 +86,7 @@ app.get("/search", async (req, res) => {
 
 app.get("/pixels", async (req, res) => {
   try {
-    const size = Math.min(64, Math.max(8, parseInt(req.query.size) || 50));
+    const size = Math.min(128, Math.max(8, parseInt(req.query.size) || 50));
     const colors = Math.min(40, Math.max(2, parseInt(req.query.colors) || 20));
 
     let url = req.query.cover;
