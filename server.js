@@ -74,6 +74,32 @@ function quantize(pixels, k, iters = 10) {
   return { centers: centers.map(c => c.map(v => Math.round(v))), assign };
 }
 
+// Fasst zu aehnliche Farben zusammen -> nur klar unterscheidbare Nummern bleiben.
+// minDist: je groesser, desto weniger (deutlichere) Farben. ~42 ist ein guter Wert.
+function mergePalette(centers, assign, minDist) {
+  const k = centers.length;
+  const map = new Array(k);
+  const newCenters = [];
+  for (let c = 0; c < k; c++) {
+    let target = -1;
+    for (let j = 0; j < newCenters.length; j++) {
+      const dr = centers[c][0] - newCenters[j][0];
+      const dg = centers[c][1] - newCenters[j][1];
+      const db = centers[c][2] - newCenters[j][2];
+      if (dr * dr + dg * dg + db * db < minDist * minDist) { target = j; break; }
+    }
+    if (target >= 0) {
+      map[c] = target;
+    } else {
+      map[c] = newCenters.length;
+      newCenters.push(centers[c].slice());
+    }
+  }
+  const newAssign = new Array(assign.length);
+  for (let i = 0; i < assign.length; i++) newAssign[i] = map[assign[i]];
+  return { centers: newCenters, assign: newAssign };
+}
+
 app.get("/", (_req, res) => res.send("Album-Pixel-Proxy laeuft. /search?q=  und  /pixels?id="));
 
 app.get("/search", async (req, res) => {
@@ -106,7 +132,10 @@ app.get("/pixels", async (req, res) => {
     const px = [];
     for (let i = 0; i < data.length; i += 3) px.push([data[i], data[i + 1], data[i + 2]]);
 
-    const { centers, assign } = quantize(px, colors);
+    const q = quantize(px, colors);
+    const merged = mergePalette(q.centers, q.assign, 42);
+    const centers = merged.centers;
+    const assign = merged.assign;
 
     const grid = [];
     for (let y = 0; y < size; y++) {
