@@ -100,11 +100,34 @@ function mergePalette(centers, assign, minDist) {
   return { centers: newCenters, assign: newAssign };
 }
 
+// Baut ein kleines Farb-Vorschaubild (pw x pw) aus einer Cover-URL
+async function coverPreview(url, pw) {
+  const r = await fetch(url);
+  const buf = Buffer.from(await r.arrayBuffer());
+  const { data } = await sharp(buf).resize(pw, pw, { fit: "fill" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const cells = [];
+  for (let i = 0; i < data.length; i += 3) cells.push({ r: data[i], g: data[i + 1], b: data[i + 2] });
+  return { w: pw, h: pw, cells };
+}
+
 app.get("/", (_req, res) => res.send("Album-Pixel-Proxy laeuft. /search?q=  und  /pixels?id="));
 
 app.get("/search", async (req, res) => {
   try {
-    res.json(await deezerSearch(req.query.q || ""));
+    let list = await deezerSearch(req.query.q || "");
+
+    // Optional: kleine Vorschaubilder mitliefern (?preview=1)
+    if (req.query.preview) {
+      const pw = Math.min(16, Math.max(6, parseInt(req.query.pw) || 12));
+      list = list.slice(0, 15);   // weniger Treffer, dafuer mit Bild
+      await Promise.all(list.map(async (a) => {
+        try {
+          if (a.artwork) a.preview = await coverPreview(a.artwork, pw);
+        } catch (_) { /* ohne Vorschau weiter */ }
+      }));
+    }
+
+    res.json(list);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -133,7 +156,7 @@ app.get("/pixels", async (req, res) => {
     for (let i = 0; i < data.length; i += 3) px.push([data[i], data[i + 1], data[i + 2]]);
 
     const q = quantize(px, colors);
-    const merged = mergePalette(q.centers, q.assign, 42);
+    const merged = mergePalette(q.centers, q.assign, 20);
     const centers = merged.centers;
     const assign = merged.assign;
 
