@@ -30,7 +30,7 @@ async function deezerSearch(q) {
     id: a.id,
     name: a.title,
     artist: (a.artist && a.artist.name) || "",
-    artwork: a.cover_medium || a.cover_big
+    artwork: a.cover_big || a.cover_xl || a.cover_medium
   }));
 }
 
@@ -104,7 +104,9 @@ function mergePalette(centers, assign, minDist) {
 async function coverPreview(url, pw) {
   const r = await fetch(url);
   const buf = Buffer.from(await r.arrayBuffer());
-  const { data } = await sharp(buf).resize(pw, pw, { fit: "fill" }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data } = await sharp(buf)
+    .resize(pw, pw, { fit: "fill", kernel: "lanczos3" })
+    .removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const cells = [];
   for (let i = 0; i < data.length; i += 3) cells.push({ r: data[i], g: data[i + 1], b: data[i + 2] });
   return { w: pw, h: pw, cells };
@@ -118,8 +120,8 @@ app.get("/search", async (req, res) => {
 
     // Optional: kleine Vorschaubilder mitliefern (?preview=1)
     if (req.query.preview) {
-      const pw = Math.min(16, Math.max(6, parseInt(req.query.pw) || 12));
-      list = list.slice(0, 15);   // weniger Treffer, dafuer mit Bild
+      const pw = Math.min(32, Math.max(6, parseInt(req.query.pw) || 24));
+      list = list.slice(0, 18);
       await Promise.all(list.map(async (a) => {
         try {
           if (a.artwork) a.preview = await coverPreview(a.artwork, pw);
@@ -136,7 +138,7 @@ app.get("/search", async (req, res) => {
 app.get("/pixels", async (req, res) => {
   try {
     const size = Math.min(128, Math.max(8, parseInt(req.query.size) || 50));
-    const colors = Math.min(40, Math.max(2, parseInt(req.query.colors) || 20));
+    const colors = Math.min(48, Math.max(2, parseInt(req.query.colors) || 20));
 
     let url = req.query.cover;
     if (!url && req.query.id) url = await deezerCover(req.query.id);
@@ -156,7 +158,7 @@ app.get("/pixels", async (req, res) => {
     for (let i = 0; i < data.length; i += 3) px.push([data[i], data[i + 1], data[i + 2]]);
 
     const q = quantize(px, colors);
-    const merged = mergePalette(q.centers, q.assign, 20);
+    const merged = mergePalette(q.centers, q.assign, 15);
     const centers = merged.centers;
     const assign = merged.assign;
 
